@@ -1,0 +1,7 @@
+# Entornos virtuales
+venv/
+__pycache__/
+
+data/raw/
+data/processed/
+*.csv
