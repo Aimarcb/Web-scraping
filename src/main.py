@@ -10,13 +10,14 @@ from src.scraper.engine import fetch_html
 from src.parser.extractor import parse_books
 from src.pipeline.cleaner import clean_and_export
 
-import notifier  # Importamos el módulo de notificación
 from notifier import MockNotifier  # Importamos la clase MockNotifier para usarla en las alertas
+from models import inicializar_base_datos, Libro
 
 # Configuración básica
 BASE_URL = "https://books.toscrape.com/"
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
+DATABASE_URL = "sqlite:///development.db"  # URL de conexión a la base de datos SQLite
 os.makedirs(DATA_PROCESSED_DIR, exist_ok=True) # Crea la carpeta si no existe
 
 def auditoria_datos(raw_data, notifier):
@@ -38,18 +39,30 @@ async def main():
     alerta_sistema = MockNotifier()
 
     try:
-        # 1. Extraer (El Motor)
+        # 1. Conectar a la base de datos y crear la sesión
+        session = inicializar_base_datos(DATABASE_URL)
+
+        # 2. Extraer y Parsear
         html = await fetch_html(BASE_URL)
-        
-        # 2. Parsear (El Cirujano)
         raw_data = parse_books(html)
         
         # 3. Auditar (El Inspector - Reglas de negocio)
         auditoria_datos(raw_data, alerta_sistema)
 
-        # 4. Limpiar y Guardar (La Refinería)
-        output_file = os.path.join(DATA_PROCESSED_DIR, "books_dataset_clean.csv")
-        clean_and_export(raw_data, output_file)
+        # 4. Persistencia en Base de Datos (Sustituye a clean_and_export)
+        print("[Database] Guardando registros en el histórico...")
+        for item in raw_data:
+            # Creamos un objeto 'Libro' por cada registro parseado
+            nuevo_libro = Libro(
+                titulo=item.get('titulo'),
+                precio=float(item.get('precio', 0)),
+                stock=item.get('stock')
+            )
+            session.add(nuevo_libro) # Lo preparamos en la recámara
+            
+        session.commit() # Confirmamos la transacción (Se guarda en disco de golpe)
+        print(f"✅ Éxito: {len(raw_data)} registros persistidos en la base de datos.")
+        session.close()
         
     except Exception as e:
         # Si la web bloquea nuestra IP y el motor falla, enviamos una alerta crítica al sistema
