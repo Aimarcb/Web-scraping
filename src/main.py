@@ -1,9 +1,27 @@
 import asyncio
 import os
 import sys
+from dotenv import load_dotenv
 
-# Esto asegura que Python encuentre nuestras carpetas internas (src, config, etc.)
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(BASE_DIR)
+
+env_path = os.path.join(BASE_DIR, ".env")
+
+# Cargamos las variables de entorno desde el archivo .env
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
+
+if not DB_USER:
+    raise ValueError("❌ CRÍTICO: No se encontraron variables de entorno. Revisa el archivo .env")
+
+# Cadena de conexión para PostgreSQL en el servidor Ubuntu
+DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
 # Importamos las piezas de nuestro motor
 from src.scraper.engine import fetch_html
@@ -15,10 +33,6 @@ from models import inicializar_base_datos, Libro
 
 # Configuración básica
 BASE_URL = "https://books.toscrape.com/"
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_PROCESSED_DIR = os.path.join(BASE_DIR, "data", "processed")
-DATABASE_URL = "sqlite:///development.db"  # URL de conexión a la base de datos SQLite
-os.makedirs(DATA_PROCESSED_DIR, exist_ok=True) # Crea la carpeta si no existe
 
 def auditoria_datos(raw_data, notifier):
     """
