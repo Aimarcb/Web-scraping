@@ -28,7 +28,7 @@ from src.scraper.engine import fetch_html
 from src.parser.extractor import parse_books
 from src.pipeline.cleaner import clean_and_export
 
-from notifier import MockNotifier  # Importamos la clase MockNotifier para usarla en las alertas
+from notifier import DiscordNotifier
 from models import inicializar_base_datos, Libro
 
 # Configuración básica
@@ -50,7 +50,7 @@ async def main():
     
     # 0. Instanciamos las dependencias (El Notificador)
     # Cuando Telegram funcione, aquí solo cambiaremos MockNotifier() por TelegramNotifier(token, id)
-    alerta_sistema = MockNotifier()
+    alerta_sistema = DiscordNotifier()
 
     try:
         # 1. Conectar a la base de datos y crear la sesión
@@ -79,6 +79,14 @@ async def main():
 
             libro_existente = session.query(Libro).filter_by(titulo=titulo_extraido).first()
             if libro_existente:
+                precio_nuevo_float = float(precio_limpio) if precio_limpio else 0.0
+
+                if precio_nuevo_float < libro_existente.precio:
+                    diferencia = libro_existente.precio - precio_nuevo_float
+                    alerta_sistema.send(f"📉 **¡OFERTA DETECTADA!**\nEl libro '{titulo_extraido}' ha bajado de £{libro_existente.precio} a £{precio_nuevo_float} (Ahorro: £{diferencia:.2f})")
+                elif precio_nuevo_float > libro_existente.precio:
+                    print(f"[Database] Inflación: '{titulo_extraido}' ha subido de precio.")
+
                 print(f"[Database] El libro '{titulo_extraido}' ya existe en la base de datos. Se actualiza.")
                 libro_existente.precio = precio_limpio if precio_limpio else 0.0
                 libro_existente.stock = stock_extraido
