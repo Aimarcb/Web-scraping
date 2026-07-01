@@ -51,17 +51,36 @@ async def main():
 
         # 4. Persistencia en Base de Datos (Sustituye a clean_and_export)
         print("[Database] Guardando registros en el histórico...")
+        registros_guardados = 0
         for item in raw_data:
-            # Creamos un objeto 'Libro' por cada registro parseado
-            nuevo_libro = Libro(
-                titulo=item.get('titulo'),
-                precio=float(item.get('precio', 0)),
-                stock=item.get('stock')
-            )
-            session.add(nuevo_libro) # Lo preparamos en la recámara
+            print(f"DEBUG - Diccionario extraído: {item}")
+
+            titulo_extraido = item.get('title')
+            precio_limpio = item.get('price', '0').replace('£', '').strip()
+            stock_extraido = item.get('stock')
+
+            if not titulo_extraido:
+                print("⚠️ [Database] Registro sin título encontrado. Se omite.")
+                continue
+
+            libro_existente = session.query(Libro).filter_by(titulo=titulo_extraido).first()
+            if libro_existente:
+                print(f"[Database] El libro '{titulo_extraido}' ya existe en la base de datos. Se actualiza.")
+                libro_existente.precio = precio_limpio if precio_limpio else 0.0
+                libro_existente.stock = stock_extraido
+            else:
+                print(f"[Database] Nuevo libro detectado: '{titulo_extraido}'. Se agrega a la base de datos.")
+                nuevo_libro = Libro(
+                    titulo=titulo_extraido,
+                    precio=float(precio_limpio) if precio_limpio else 0.0,
+                    stock=stock_extraido
+                )
+                session.add(nuevo_libro) # Lo preparamos en la recámara
+
+            registros_guardados += 1
             
         session.commit() # Confirmamos la transacción (Se guarda en disco de golpe)
-        print(f"✅ Éxito: {len(raw_data)} registros persistidos en la base de datos.")
+        print(f"✅ Éxito: {registros_guardados} de {len(raw_data)} registros persistidos en la base de datos.")
         session.close()
         
     except Exception as e:

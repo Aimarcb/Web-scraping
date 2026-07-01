@@ -1,6 +1,7 @@
 from datetime import datetime
 from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.sql import func
 
 # El "Base" es el molde del que heredarán todas nuestras tablas
 Base = declarative_base()
@@ -13,10 +14,12 @@ class Libro(Base):
     __tablename__ = 'libros'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    titulo = Column(String, nullable=False)
+    titulo = Column(String, nullable=False, unique=True)
     precio = Column(Float, nullable=False)
     stock = Column(String, nullable=True)
-    fecha_extraccion = Column(DateTime, default=datetime.utcnow) # Log de auditoría
+    # default: Se ejecuta solo al hacer INSERT
+    # onupdate: Se ejecuta automáticamente cada vez que hacemos un UPDATE
+    fecha_extraccion = Column(DateTime, default=func.now(), onupdate=func.now())
 
 def inicializar_base_datos(database_url: str):
     """
