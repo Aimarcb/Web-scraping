@@ -1,13 +1,16 @@
 import asyncio
+import argparse
 from playwright.async_api import async_playwright
 
-async def test_stealth_connection(url: str):
+async def extraer_alojamientos(destino: str, entrada: str, salida: str):
     """
-    Testea la conexión e interactúa con la SPA esquivando defensas anti-bot.
-    Arquitectura de grado de producción sin dependencias rotas.
+    Motor de extracción con inyección de URL dinámica y evasión de defensas.
     """
+    # Construimos la URL Maestra (El atajo del hacker)
+    # Booking usa 'ss' para destino, y 'checkin'/'checkout' para las fechas
+    url = f"https://www.booking.com/searchresults.html?ss={destino}&checkin={entrada}&checkout={salida}"
+    
     async with async_playwright() as p:
-        # 1. EVASIÓN A NIVEL DE CHROMIUM (Desactiva la bandera de bot)
         browser = await p.chromium.launch(
             headless=False,
             args=["--disable-blink-features=AutomationControlled"]
@@ -19,61 +22,66 @@ async def test_stealth_connection(url: str):
         )
         page = await context.new_page()
 
-        # 2. INYECCIÓN JS MANUAL (Camuflaje profundo)
+        # Inyección JS para eludir detección de bot
         await page.add_init_script("""
             Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
             window.navigator.chrome = { runtime: {} };
         """)
 
-        print(f"🕵️ Navegando a {url}...")
-        
-        # Usamos domcontentloaded para soltar el hilo en cuanto llegue el esqueleto
+        print(f"🕵️ Infiltrando mediante URL maestra: {url}")
         response = await page.goto(url, wait_until="domcontentloaded", timeout=60000)
         print(f"Estado HTTP: {response.status}")
 
-        print("⏳ Esperando estabilización de la red (Network Idle)...")
+        print("⏳ Esperando renderizado de tarjetas de alojamiento...")
         await page.wait_for_load_state("networkidle")
         
-        # 3. INTERACCIÓN (Búsqueda autónoma de alojamiento)
-        print("✅ Interfaz base detectada. Iniciando interacción humana...")
+        # Damos margen al motor JS de Booking para que pinte los precios
+        await page.wait_for_timeout(3000)
         
-        try:
-            # Localizamos el input por su atributo semántico inmutable
-            buscador = page.locator('input[name="ss"]')
+        print(f"🔍 Analizando disponibilidad en {destino} del {entrada} al {salida}...\n")
+        
+        tarjetas_hoteles = page.locator('div[data-testid="property-card"]')
+        cantidad_hoteles = await tarjetas_hoteles.count()
+        
+        if cantidad_hoteles == 0:
+            print("⚠️ No se encontraron alojamientos. ¿Fechas pasadas o bloqueo anti-bot?")
+            await page.screenshot(path="error_extraccion.png")
+        else:
+            print(f"📊 Se detectaron {cantidad_hoteles} alojamientos. Extrayendo el Top 5:\n")
+            limite = min(5, cantidad_hoteles)
             
-            # Escribimos el objetivo
-            print("📍 Introduciendo destino: Praga...")
-            await buscador.fill("Praga")
-            
-            # Pausa humana antes de confirmar (imprescindible para eludir el bot-scoring)
-            await page.wait_for_timeout(1500)
-            
-            # Simulamos pulsar Enter con el hardware virtual
-            print("⌨️ Tecla Enter pulsada. Esperando resultados del servidor...")
-            await buscador.press("Enter")
-            
-            # Esperamos a que la nueva página de resultados cargue
-            await page.wait_for_load_state("networkidle")
-            
-            # Damos 2 segundos extra para que el motor gráfico pinte las fotos de los hoteles
-            await page.wait_for_timeout(2000)
-            
-            # Auditoría visual del éxito
-            await page.screenshot(path="resultados_extraccion.png")
-            print("📸 ÉXITO: Captura de resultados guardada como 'resultados_extraccion.png'.")
-            
-        except Exception as e:
-            print(f"⚠️ Error crítico durante la interacción: {e}")
-            # Si el script falla, hacemos una foto para ver qué nos ha bloqueado
-            await page.screenshot(path="error_interaccion.png")
-            print("📸 Captura de depuración guardada como 'error_interaccion.png'.")
-
-        # Tiempo para auditar visualmente la ventana en tu monitor antes de destruir el proceso
-        await asyncio.sleep(5)
+            for i in range(limite):
+                tarjeta = tarjetas_hoteles.nth(i)
+                
+                try:
+                    titulo = await tarjeta.locator('[data-testid="title"]').inner_text(timeout=2000)
+                except:
+                    titulo = "Título desconocido"
+                    
+                try:
+                    # En la vista de resultados con fechas, Booking muestra el precio total
+                    precio = await tarjeta.locator('[data-testid="price-and-discounted-price"]').inner_text(timeout=2000)
+                    precio = precio.replace('\n', ' ').strip()
+                except:
+                    precio = "Agotado / Precio oculto"
+                    
+                print(f"🏨 Alojamiento {i+1}: {titulo}")
+                print(f"💰 Precio Total Estancia: {precio}")
+                print("-" * 50)
+        
         await browser.close()
 
 if __name__ == "__main__":
-    # Nuestro objetivo de grado militar
-    target = "https://www.booking.com/"
-    print("🚀 INICIANDO PIPELINE DE EVASIÓN E INTERACCIÓN...")
-    asyncio.run(test_stealth_connection(target))
+    # La Magia de Argparse (Interfaz de cliente)
+    parser = argparse.ArgumentParser(description="Scraper táctico de alojamientos en Booking")
+    
+    # Definimos las "banderas" que el cliente puede usar en la terminal
+    parser.add_argument("-d", "--destino", type=str, required=True, help="Ciudad objetivo (ej: Praga)")
+    parser.add_argument("-e", "--entrada", type=str, required=True, help="Fecha de check-in (Formato: YYYY-MM-DD)")
+    parser.add_argument("-s", "--salida", type=str, required=True, help="Fecha de check-out (Formato: YYYY-MM-DD)")
+    
+    # Python lee lo que escribes en la terminal y lo convierte en un objeto
+    args = parser.parse_args()
+    
+    print(f"🚀 INICIANDO MISIÓN: Objetivo {args.destino}")
+    asyncio.run(extraer_alojamientos(args.destino, args.entrada, args.salida))
