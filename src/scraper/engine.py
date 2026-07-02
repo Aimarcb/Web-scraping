@@ -1,29 +1,42 @@
-import asyncio
+import logging
 from playwright.async_api import async_playwright
 
-async def fetch_html(url: str) -> str:
+async def fetch_html_booking(url: str) -> str:
     """
-    Se conecta a una URL usando un navegador Chromium invisible (headless),
-    espera a que el JavaScript se ejecute y devuelve el HTML completo.
+    Navega a la URL objetivo esquivando defensas anti-bot y devuelve el HTML crudo.
+    Se cierra automáticamente para liberar recursos del servidor.
     """
-    print(f"Iniciando conexión asíncrona con: {url}")
+    logging.info(f"🕸️ [Engine] Desplegando navegador stealth hacia: {url}")
     
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True, # En producción (Ubuntu) SIEMPRE va en True
+            args=["--disable-blink-features=AutomationControlled"]
+        )
         
-        page = await browser.new_page()
-        
-        # Navegamos a la URL y esperamos a que el DOM básico esté cargado
-        await page.goto(url, wait_until="domcontentloaded")
-        
-        # Pausa táctica de 1 segundo para simular comportamiento humano y evitar baneos
-        await asyncio.sleep(1)
-        
-        # Extraemos todo el código HTML ya renderizado por la página
-        html_content = await page.content()
-        
-        # Cerramos el navegador para liberar memoria RAM en tu CachyOS
-        await browser.close()
-        
-        print(f"[Motor] HTML obtenido con éxito ({len(html_content)} bytes)")
-        return html_content
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+        )
+        page = await context.new_page()
+
+        # Inyección manual JS
+        await page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+            window.navigator.chrome = { runtime: {} };
+        """)
+
+        try:
+            await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            await page.wait_for_load_state("networkidle")
+            await page.wait_for_timeout(3000) # Cortesía para el renderizado
+            
+            # CRÍTICO: Extraemos todo el código HTML de la web como un simple string de texto
+            html_crudo = await page.content()
+            logging.info("✅ [Engine] HTML extraído con éxito. Cerrando navegador.")
+            
+            return html_crudo
+            
+        except Exception as e:
+            logging.error(f"❌ [Engine] Fallo en la navegación: {e}")
+            return ""

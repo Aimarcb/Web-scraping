@@ -1,115 +1,96 @@
 import asyncio
+import argparse
+import logging
 import os
-import sys
+from datetime import datetime
+
+from scraper.engine import fetch_html_booking
+from parser.extractor import parse_alojamientos
+
+from models import inicializar_base_datos, Alojamiento
 from dotenv import load_dotenv
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(BASE_DIR)
+load_dotenv()
 
-env_path = os.path.join(BASE_DIR, ".env")
+db_user = os.getenv("DB_USER", "postgres")
+db_pass = os.getenv("DB_PASSWORD", "postgres")
+db_host = os.getenv("DB_HOST", "localhost")
+db_port = os.getenv("DB_PORT", "5432")
+db_name = os.getenv("DB_NAME", "postgres")
 
-# Cargamos las variables de entorno desde el archivo .env
-load_dotenv(os.path.join(BASE_DIR, ".env"))
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
 
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
-DB_NAME = os.getenv("DB_NAME")
-
-if not DB_USER:
-    raise ValueError("❌ CRÍTICO: No se encontraron variables de entorno. Revisa el archivo .env")
-
-# Cadena de conexión para PostgreSQL en el servidor Ubuntu
-DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-
-# Importamos las piezas de nuestro motor
-from src.scraper.engine import fetch_html
-from src.parser.extractor import parse_books
-from src.pipeline.cleaner import clean_and_export
-
-from notifier import DiscordNotifier
-from models import inicializar_base_datos, Libro
-
-# Configuración básica
-BASE_URL = "https://books.toscrape.com/"
-
-def auditoria_datos(raw_data, notifier):
-    """
-    Evalúa las reglas de negocio del cliente y dispara alertas si es necesario.
-    """
-    for libro in raw_data:
-        # Buscamos si en el texto crudo extraído aparece que no hay stock
-        stock_text = str(libro.get('stock', '')).lower()
-        if "out of stock" in stock_text:
-            mensaje = f"⚠️ ALERTA DE STOCK: El libro '{libro.get('titulo', 'Desconocido')}' se ha agotado."
-            notifier.send(mensaje)
-
-async def main():
-    print("🚀 INICIANDO PIPELINE DE EXTRACCIÓN AVANZADA...")
-    
-    # 0. Instanciamos las dependencias (El Notificador)
-    # Cuando Telegram funcione, aquí solo cambiaremos MockNotifier() por TelegramNotifier(token, id)
-    alerta_sistema = DiscordNotifier()
-
+async def pipeline_principal(destino: str, entrada_str: str, salida_str: str):
+    # 1. Validar y convertir fechas de texto a objetos datetime de Python
     try:
-        # 1. Conectar a la base de datos y crear la sesión
-        session = inicializar_base_datos(DATABASE_URL)
+        fecha_in = datetime.strptime(entrada_str, "%Y-%m-%d").date()
+        fecha_out = datetime.strptime(salida_str, "%Y-%m-%d").date()
+    except ValueError:
+        logging.error("❌ Formato de fecha incorrecto. Debe ser YYYY-MM-DD")
+        return
 
-        # 2. Extraer y Parsear
-        html = await fetch_html(BASE_URL)
-        raw_data = parse_books(html)
+    # 2. Construir la URL Maestra para el motor
+    url = f"https://www.booking.com/searchresults.html?ss={destino}&checkin={entrada_str}&checkout={salida_str}"
+    
+    # 3. EJECUCIÓN DEL MOTOR (Fase de Red)
+    html_crudo = await fetch_html_booking(url)
+    
+    if not html_crudo:
+        logging.error("❌ El motor no pudo extraer el HTML. Abortando pipeline.")
+        return
+
+    # 4. EJECUCIÓN DEL PARSER (Fase de Análisis)
+    hoteles_extraidos = parse_alojamientos(html_crudo)
+    
+    if not hoteles_extraidos:
+        logging.warning("⚠️ No se extrajeron alojamientos del HTML.")
+        return
+
+    # 5. PERSISTENCIA (Fase de Base de Datos)
+    logging.info("💾 Conectando a PostgreSQL para guardar los resultados...")
+    
+    URL_BD = os.getenv(
+        "DATABASE_URL", 
+        f"postgresql://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
+    )
+    
+    # Inicializamos la conexión y obtenemos una sesión limpia
+    db = inicializar_base_datos(URL_BD)
+    
+    try:
+        nuevos_registros = []
+        for h in hoteles_extraidos:
+            # Instanciamos el modelo ORM mapeando los datos limpios
+            alojamiento_db = Alojamiento(
+                destino=destino,
+                titulo=h["titulo"],
+                precio=h["precio"],
+                fecha_entrada=fecha_in,
+                fecha_salida=fecha_out
+            )
+            nuevos_registros.append(alojamiento_db)
         
-        # 3. Auditar (El Inspector - Reglas de negocio)
-        auditoria_datos(raw_data, alerta_sistema)
-
-        # 4. Persistencia en Base de Datos (Sustituye a clean_and_export)
-        print("[Database] Guardando registros en el histórico...")
-        registros_guardados = 0
-        for item in raw_data:
-            print(f"DEBUG - Diccionario extraído: {item}")
-
-            titulo_extraido = item.get('title')
-            precio_limpio = item.get('price', '0').replace('£', '').strip()
-            stock_extraido = item.get('stock')
-
-            if not titulo_extraido:
-                print("⚠️ [Database] Registro sin título encontrado. Se omite.")
-                continue
-
-            libro_existente = session.query(Libro).filter_by(titulo=titulo_extraido).first()
-            if libro_existente:
-                precio_nuevo_float = float(precio_limpio) if precio_limpio else 0.0
-
-                if precio_nuevo_float < libro_existente.precio:
-                    diferencia = libro_existente.precio - precio_nuevo_float
-                    alerta_sistema.send(f"📉 **¡OFERTA DETECTADA!**\nEl libro '{titulo_extraido}' ha bajado de £{libro_existente.precio} a £{precio_nuevo_float} (Ahorro: £{diferencia:.2f})")
-                elif precio_nuevo_float > libro_existente.precio:
-                    print(f"[Database] Inflación: '{titulo_extraido}' ha subido de precio.")
-
-                print(f"[Database] El libro '{titulo_extraido}' ya existe en la base de datos. Se actualiza.")
-                libro_existente.precio = precio_limpio if precio_limpio else 0.0
-                libro_existente.stock = stock_extraido
-            else:
-                print(f"[Database] Nuevo libro detectado: '{titulo_extraido}'. Se agrega a la base de datos.")
-                nuevo_libro = Libro(
-                    titulo=titulo_extraido,
-                    precio=float(precio_limpio) if precio_limpio else 0.0,
-                    stock=stock_extraido
-                )
-                session.add(nuevo_libro) # Lo preparamos en la recámara
-
-            registros_guardados += 1
-            
-        session.commit() # Confirmamos la transacción (Se guarda en disco de golpe)
-        print(f"✅ Éxito: {registros_guardados} de {len(raw_data)} registros persistidos en la base de datos.")
-        session.close()
+        db.add_all(nuevos_registros)
+        db.commit()
+        logging.info(f"✨ Éxito: Guardados {len(nuevos_registros)} alojamientos en la base de datos.")
         
     except Exception as e:
-        # Si la web bloquea nuestra IP y el motor falla, enviamos una alerta crítica al sistema
-        alerta_sistema.send(f"❌ CAÍDA CRÍTICA DEL SISTEMA: {e}")
-        print(f"❌ Error crítico en la ejecución: {e}")
+        db.rollback()
+        logging.error(f"❌ Error al guardar en la base de datos: {e}")
+    finally:
+        db.close()
 
 if __name__ == "__main__":
-    # Arrancamos el bucle asíncrono
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description="Orquestador del Scraper de Alojamientos")
+    parser.add_argument("-d", "--destino", type=str, required=True, help="Ciudad destino")
+    parser.add_argument("-e", "--entrada", type=str, required=True, help="Fecha entrada YYYY-MM-DD")
+    parser.add_argument("-s", "--salida", type=str, required=True, help="Fecha salida YYYY-MM-DD")
+    
+    args = parser.parse_args()
+    
+    logging.info(f"🏁 Iniciando proceso para {args.destino} ({args.entrada} / {args.salida})")
+    asyncio.run(pipeline_principal(args.destino, args.entrada, args.salida))

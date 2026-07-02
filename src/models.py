@@ -1,36 +1,34 @@
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 from datetime import datetime
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import declarative_base, sessionmaker
-from sqlalchemy.sql import func
 
-# El "Base" es el molde del que heredarán todas nuestras tablas
 Base = declarative_base()
 
-class Libro(Base):
-    """
-    Representa la tabla 'libros' en la base de datos.
-    Cada variable es una columna.
-    """
-    __tablename__ = 'libros'
+class Alojamiento(Base):
+    __tablename__ = 'alojamientos'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    titulo = Column(String, nullable=False, unique=True)
+    destino = Column(String, nullable=False)
+    titulo = Column(String, nullable=False)
     precio = Column(Float, nullable=False)
-    stock = Column(String, nullable=True)
-    # default: Se ejecuta solo al hacer INSERT
-    # onupdate: Se ejecuta automáticamente cada vez que hacemos un UPDATE
-    fecha_extraccion = Column(DateTime, default=func.now(), onupdate=func.now())
+    
+    # Almacenamos las fechas del viaje como tipo Date (no strings) para poder hacer filtros analíticos luego
+    fecha_entrada = Column(Date, nullable=False)
+    fecha_salida = Column(Date, nullable=False)
+    
+    # Registro de cuándo el bot hizo la extracción
+    fecha_captura = Column(DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Alojamiento(titulo='{self.titulo}', precio={self.precio}, destino='{self.destino}')>"
 
 def inicializar_base_datos(database_url: str):
     """
     Crea la conexión y genera las tablas si no existen.
-    Explicación de flags:
-    - 'echo=False': Si lo pones en True, SQLAlchemy mostrará por terminal
-      todo el código SQL que genera por debajo (útil para debuggear).
     """
     engine = create_engine(database_url, echo=False)
     Base.metadata.create_all(engine)
     
-    # Creamos una fábrica de sesiones para interactuar con los datos
     Session = sessionmaker(bind=engine)
     return Session()
