@@ -1,16 +1,18 @@
 #!/bin/bash
-echo "Iniciando el script de scraping..."
 
-# Comprobamos si el entorno virtual existe antes de intentar activarlo
-if [ -d ".venv" ]; then
-    source .venv/bin/activate
-    echo "[*] Entorno virtual activado."
-else
-    echo "❌ Error: No se encontró el entorno virtual (.venv)."
-    exit 1
-fi
+cd "$(dirname "$0")"
 
-echo "[*] Ejecutando el motor de extracción..."
-python src/main.py
+# 2. PANEL DE CONTROL DEL CLIENTE
+DESTINO="Praga"
+ENTRADA="2026-09-01"
+SALIDA="2026-09-15"
 
-echo "Proceso de scraping finalizado."
+echo "========================================================="
+echo "🚀 INICIANDO RADAR DE PRECIOS"
+echo "📍 Destino: $DESTINO"
+echo "📅 Fechas: $ENTRADA -> $SALIDA"
+echo "========================================================="
+
+.venv/bin/python src/main.py -d "$DESTINO" -e "$ENTRADA" -s "$SALIDA"
+
+echo "✅ Ejecución finalizada."

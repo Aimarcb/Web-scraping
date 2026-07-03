@@ -1,3 +1,4 @@
+aiohttp==3.10.5
 anyio==4.14.1
 asyncpg==0.31.0
 beautifulsoup4==4.15.0
