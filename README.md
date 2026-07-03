@@ -1,10 +1,10 @@
 # 🏨 Booking Price Radar
 
-![Python](https://img.shields.io/badge/Python-3-blue?style=for-the-badge&logo=python)
-![Playwright](https://img.shields.io/badge/Playwright-green?style=for-the-badge&logo=playwright)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?style=for-the-badge&logo=postgresql)
-![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker)
-![Discord](https://img.shields.io/badge/Discord-Alerts-5865F2?style=for-the-badge&logo=discord)
+[![Python](https://img.shields.io/badge/Python-3.14-blue?style=for-the-badge&logo=python)](https://www.python.org/)
+[![Playwright](https://img.shields.io/badge/Playwright-Stealth-green?style=for-the-badge&logo=playwright)](https://playwright.dev/python/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue?style=for-the-badge&logo=postgresql)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/Docker-Container-2496ED?style=for-the-badge&logo=docker)](https://www.docker.com/)
+[![Discord](https://img.shields.io/badge/Discord-Alerts-5865F2?style=for-the-badge&logo=discord)](https://discord.com/developers/docs/resources/webhook)
 
 A Python automation project that monitors accommodation prices on Booking.com.
 
