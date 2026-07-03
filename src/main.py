@@ -123,11 +123,11 @@ async def pipeline_principal(destino: str, entrada_str: str, salida_str: str):
 if __name__ == "__main__":
     # Configuración de argumentos de consola con banderas cortas y descripción explícita
     parser = argparse.ArgumentParser(description="Orquestador táctico de Scraping y Alertas")
-    parser.add_argument("-d", "--destino", type=str, required=True, help="Ciudad de destino para el análisis")
-    parser.add_argument("-e", "--entrada", type=str, required=True, help="Fecha de check-in (YYYY-MM-DD)")
-    parser.add_argument("-s", "--salida", type=str, required=True, help="Fecha de check-out (YYYY-MM-DD)")
+    parser.add_argument("--city", type=str, required=True, help="Ciudad de destino para el análisis")
+    parser.add_argument("--checkin", type=str, required=True, help="Fecha de check-in (YYYY-MM-DD)")
+    parser.add_argument("--checkout", type=str, required=True, help="Fecha de check-out (YYYY-MM-DD)")
     
     args = parser.parse_args()
     
-    logging.info(f"🏁 Ejecutando pipeline automatizado para {args.destino} ({args.entrada} -> {args.salida})")
-    asyncio.run(pipeline_principal(args.destino, args.entrada, args.salida))
+    logging.info(f"🏁 Ejecutando pipeline automatizado para {args.city} ({args.checkin} -> {args.checkout})")
+    asyncio.run(pipeline_principal(args.city, args.checkin, args.checkout))

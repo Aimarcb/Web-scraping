@@ -3,16 +3,16 @@
 cd "$(dirname "$0")"
 
 # 2. PANEL DE CONTROL DEL CLIENTE
-DESTINO="Praga"
-ENTRADA="2026-09-01"
-SALIDA="2026-09-15"
+CITY="Prague"
+CHECKIN="2026-09-01"
+CHECKOUT="2026-09-15"
 
 echo "========================================================="
 echo "🚀 INICIANDO RADAR DE PRECIOS"
-echo "📍 Destino: $DESTINO"
-echo "📅 Fechas: $ENTRADA -> $SALIDA"
+echo "📍 Destino: $CITY"
+echo "📅 Fechas: $CHECKIN -> $CHECKOUT"
 echo "========================================================="
 
-.venv/bin/python src/main.py -d "$DESTINO" -e "$ENTRADA" -s "$SALIDA"
+.venv/bin/python src/main.py --city "$CITY" --checkin "$CHECKIN" --checkout "$CHECKOUT"
 
 echo "✅ Ejecución finalizada."
