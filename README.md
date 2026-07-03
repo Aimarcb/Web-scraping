@@ -91,9 +91,9 @@ source .venv/bin/activate
 Open `run.sh` and edit the destination and travel dates.
 
 ```bash
-DESTINO="Praga"
-ENTRADA="2026-09-01"
-SALIDA="2026-09-15"
+CITY="Prague"
+CHECKIN="2026-09-01"
+CHECKOUT="2026-09-15"
 ```
 
 ## 3. Run the scraper
